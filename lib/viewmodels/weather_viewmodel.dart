@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/services/api_service.dart';
 import '../models/city_weather_model.dart';
 import '../models/weather_model.dart';
@@ -14,42 +15,44 @@ import '../models/city_model.dart';
 
 class WeatherViewModel with ChangeNotifier {
   final ApiService _apiService = ApiService();
-  Weather? _weather;
   List<City> _cities = [];
-  List<City> _displayCities = [];
   List<CityWeather> _cityWeatherList = [];
   List<CityWeather> get cityWeatherList => _cityWeatherList;
-  // List<Weather> _weatherDataList = [];
 
-  Weather? get weather => _weather;
   List<City> get cities => _cities;
-  List<City> get displayCities => _displayCities;
-  // List<Weather> get weatherDataList => _weatherDataList;
+
   final _defaultDisplayCitiesString = ['lagos', 'abuja', 'ibadan'];
   bool loading = false;
 
+  SharedPreferences? _sharedPreferences;
+
   WeatherViewModel() {
-    _loadCities();
+    init();
   }
 
-  Future<void> _loadCities() async {
-    // Load the JSON file from assets
-    final String response = await rootBundle.loadString('assets/cities.json');
-    final List<dynamic> data = json.decode(response) as List<dynamic>;
-
-    // Convert only the first 15 maps to City objects
-    _cities = data.take(15).map((cityJson) => City.fromJson(cityJson)).toList();
+  void init() async {
+    _sharedPreferences = await SharedPreferences.getInstance();
+    await _loadCities();
     _getDisplayCities();
     notifyListeners();
   }
 
-  void _getDisplayCities() {
-    // todo: use shaed prefrence to get [defaultDisplayCitiesString]
+  Future<void> _loadCities() async {
+    final String response = await rootBundle.loadString('assets/cities.json');
+    final List<dynamic> data = json.decode(response) as List<dynamic>;
+    _cities = data.take(15).map((cityJson) => City.fromJson(cityJson)).toList();
+  }
+
+  void _getDisplayCities() async {
+    final List<String> savedCityNames =
+        _sharedPreferences?.getStringList('activeCityList') ??
+            _defaultDisplayCitiesString;
+
     _cityWeatherList = _cities
-        .where((city) =>
-            _defaultDisplayCitiesString.contains(city.city.toLowerCase()))
+        .where((city) => savedCityNames.contains(city.cityName.toLowerCase()))
         .map((city) => CityWeather(city: city))
         .toList();
+
     _loadDefaultWeatherData();
   }
 
@@ -86,8 +89,8 @@ class WeatherViewModel with ChangeNotifier {
     double normalizedTemp = (temp - minTemp) / (maxTemp - minTemp);
     normalizedTemp = normalizedTemp.clamp(0.0, 1.0);
 
-    final Color coldColor = Colors.blue[900]!;
-    final Color hotColor = Colors.blueAccent[100]!;
+    final Color coldColor = Colors.purple[900]!;
+    final Color hotColor = Colors.purple[100]!;
 
     return Color.lerp(coldColor, hotColor, normalizedTemp)!;
   }
@@ -102,10 +105,9 @@ class WeatherViewModel with ChangeNotifier {
   }
 
   void getCurrentLocationWeather() async {
-    // setLoader(true);
-    try {
-      PermissionStatus status = await Permission.camera.request();
-      if (status.isGranted) {
+    // try {
+    //   PermissionStatus status = await Permission.camera.request();
+      // if (status.isGranted) {
         final City currentyCity = await getCurrentLocation();
         final getcurrentCityWeather =
             await getWeather(currentyCity.lat, currentyCity.lng);
@@ -114,12 +116,11 @@ class WeatherViewModel with ChangeNotifier {
         if (getcurrentCityWeather != null) {
           currentCityWeather.weather = getcurrentCityWeather;
         }
-        cityWeatherList.insert(1, currentCityWeather);
-      }
-    } catch (e) {
-      print("An error occurred while getting the current location: $e");
-    }
-    // setLoader(false);
+        cityWeatherList.insert(0, currentCityWeather);
+    //   }
+    // } catch (e) {
+    //   print("An error occurred while getting the current location: $e");
+    // }
   }
 
   Future<City> getCurrentLocation() async {
@@ -131,10 +132,21 @@ class WeatherViewModel with ChangeNotifier {
 
     String cityName = placemarks.first.locality ?? "Unknown City";
     City currentLocation = City(
-        city: cityName,
+        cityName: cityName,
         lat: position.latitude.toString(),
         lng: position.longitude.toString());
 
     return currentLocation;
+  }
+
+  void updateActiveCities(List<City> updatedCities) async {
+    _cityWeatherList =
+        updatedCities.map((city) => CityWeather(city: city)).toList();
+
+    final prefs = await SharedPreferences.getInstance();
+    List<String> cityNames =
+        updatedCities.map((city) => city.cityName.toLowerCase()).toList();
+    await prefs.setStringList('activeCityList', cityNames);
+    _loadDefaultWeatherData(); // Fetch the weather data for the updated list
   }
 }

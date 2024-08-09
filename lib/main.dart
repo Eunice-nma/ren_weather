@@ -13,9 +13,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => WeatherViewModel(),
-      child: const MaterialApp(
+      child: MaterialApp(
+        // theme: ThemeData(
+        //   primaryColor: Colors.blueAccent,
+        //   iconTheme: IconThemeData(
+        //     color: Colors.blueAccent,
+        //   ),
+        // ),
         debugShowCheckedModeBanner: false,
-        home: HomeScreen(),
+        home: const HomeScreen(),
       ),
     );
   }

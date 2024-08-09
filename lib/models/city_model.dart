@@ -1,13 +1,13 @@
 class City {
-  final String city;
+  final String cityName;
   final String lat;
   final String lng;
 
-  City({required this.city, required this.lat, required this.lng});
+  City({required this.cityName, required this.lat, required this.lng});
 
   factory City.fromJson(Map<String, dynamic> json) {
     return City(
-      city: json['city'],
+      cityName: json['city'],
       lat: json['lat'],
       lng: json['lng'],
     );
