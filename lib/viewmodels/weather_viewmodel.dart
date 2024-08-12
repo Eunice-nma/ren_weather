@@ -44,15 +44,22 @@ class WeatherViewModel with ChangeNotifier {
   }
 
   void _getDisplayCities() async {
-    final List<String> savedCityNames =
-        _sharedPreferences?.getStringList('activeCityList') ??
-            _defaultDisplayCitiesString;
-
-    _cityWeatherList = _cities
-        .where((city) => savedCityNames.contains(city.cityName.toLowerCase()))
-        .map((city) => CityWeather(city: city))
-        .toList();
-
+    final List<String>? storedCityList =
+        _sharedPreferences?.getStringList('storedCityList');
+    if (storedCityList != null && storedCityList.isNotEmpty) {
+      _cityWeatherList = _cities
+          .where((city) => storedCityList.contains(city.cityName.toLowerCase()))
+          .map((city) => CityWeather(city: city))
+          .toList();
+    }
+    if (_cityWeatherList.isEmpty) {
+      _cityWeatherList = _cities
+          .where((city) =>
+              _defaultDisplayCitiesString.contains(city.cityName.toLowerCase()))
+          .map((city) => CityWeather(city: city))
+          .toList();
+    }
+    notifyListeners();
     _loadDefaultWeatherData();
   }
 
@@ -64,6 +71,9 @@ class WeatherViewModel with ChangeNotifier {
         cityWeather.weather = weatherData;
       }
     }
+    List<String> cityNames =
+        _cityWeatherList.map((cw) => cw.city.cityName.toLowerCase()).toList();
+    _sharedPreferences!.setStringList('storedCityList', cityNames);
     notifyListeners();
   }
 
@@ -105,22 +115,31 @@ class WeatherViewModel with ChangeNotifier {
   }
 
   void getCurrentLocationWeather() async {
-    // try {
-    //   PermissionStatus status = await Permission.camera.request();
-      // if (status.isGranted) {
+    try {
+      setLoader(true);
+      PermissionStatus status = await Permission.locationWhenInUse.request();
+      if (status.isGranted) {
         final City currentyCity = await getCurrentLocation();
         final getcurrentCityWeather =
             await getWeather(currentyCity.lat, currentyCity.lng);
-        CityWeather currentCityWeather = CityWeather(city: currentyCity);
 
-        if (getcurrentCityWeather != null) {
-          currentCityWeather.weather = getcurrentCityWeather;
+        int cityIndex = cityWeatherList.indexWhere((cityWeather) =>
+            cityWeather.city.cityName == currentyCity.cityName);
+
+        if (cityIndex != -1) {
+          cityWeatherList[cityIndex].weather = getcurrentCityWeather;
+        } else {
+          CityWeather currentCityWeather = CityWeather(
+            city: currentyCity,
+            weather: getcurrentCityWeather,
+          );
+          cityWeatherList.insert(0, currentCityWeather);
         }
-        cityWeatherList.insert(0, currentCityWeather);
-    //   }
-    // } catch (e) {
-    //   print("An error occurred while getting the current location: $e");
-    // }
+      }
+    } catch (e) {
+      print("An error occurred while getting the current location: $e");
+    }
+    setLoader(false);
   }
 
   Future<City> getCurrentLocation() async {
@@ -142,11 +161,6 @@ class WeatherViewModel with ChangeNotifier {
   void updateActiveCities(List<City> updatedCities) async {
     _cityWeatherList =
         updatedCities.map((city) => CityWeather(city: city)).toList();
-
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cityNames =
-        updatedCities.map((city) => city.cityName.toLowerCase()).toList();
-    await prefs.setStringList('activeCityList', cityNames);
-    _loadDefaultWeatherData(); // Fetch the weather data for the updated list
+    _loadDefaultWeatherData();
   }
 }
